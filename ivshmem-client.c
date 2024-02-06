@@ -6,7 +6,12 @@
  * top-level directory.
  */
 
-#include "qemu/osdep.h"
+//#include "qemu/osdep.h"
+#include <stdio.h>
+#include <errno.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include <inttypes.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
