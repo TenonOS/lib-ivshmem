@@ -1,0 +1,6 @@
+$(eval $(call addlib_s,libsidecar,$(CONFIG_LIBIVSHMEM)))
+
+CINCLUDES-$(CONFIG_LIBIVSHMEM)	+= -I$(LIBIVSHMEM_BASE)/include
+CXXINCLUDES-$(CONFIG_LIBIVSHMEM)	+= -I$(LIBIVSHMEM_BASE)/include
+
+LIBIVSHMEM_SRCS-y += $(LIBIVSHMEM_BASE)/ivshmem-driver.c
