@@ -33,7 +33,7 @@ static int ivshmem_pci_add_dev(struct pci_device *pci_dev){
     int rc = 0;
 
     UK_ASSERT(pci_dev != NULL);
-
+    uk_pr_info("Allocate ivshmem device\n");
     ipci_dev = uk_malloc(a, sizeof(*ipci_dev));
     if (!ipci_dev) {
         uk_pr_err("Failed to allocate ivshmem pci device\n");
