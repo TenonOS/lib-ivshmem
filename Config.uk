@@ -1,0 +1,3 @@
+menuconfig LIBIVSHMEM
+	bool "libivshmem: Driver for ivshmem device"
+	default n
