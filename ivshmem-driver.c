@@ -70,36 +70,27 @@ static int ivshmem_pci_add_dev(struct pci_device *pci_dev)
     bar0_data = pci_conf_read(bar0_addr);
 
     bar2_addr = get_config_addr(bus, device, function, PCI_BASE_ADDRESS_2);
-    pci_conf_write(bar2_addr, 0xffffffff);
+    //
 	bar2_data = pci_conf_read(bar2_addr);
     uk_pr_info("bar2_data:0x%lx\n", bar2_data);
 
     bar3_addr = get_config_addr(bus, device, function, PCI_BASE_ADDRESS_3);
-    pci_conf_write(bar3_addr, 0xffffffff);
+    //
 	bar3_data = pci_conf_read(bar3_addr);
     uk_pr_info("bar3_data:0x%lx\n", bar3_data);
 
+    uint64_t ivshmem_addr = (((uint64_t)bar3_data << 32) | (bar2_data & 0xfffffff0));
     /* Calculate share memory region size */
+    pci_conf_write(bar2_addr, 0xffffffff);
+    bar2_data = pci_conf_read(bar2_addr);
+    pci_conf_write(bar3_addr, 0xffffffff);
+    bar3_data = pci_conf_read(bar3_addr);
     uint64_t ivshmem_size = ~((((uint64_t)bar3_data << 32) | bar2_data) & 0xfffffffffffffff0) + 1;
     uk_pr_info("ivshmem_size:0x%lx\n", ivshmem_size);
-    /* Allocate memory for shm region */
-    void *mem_addr = uk_memalign(a, ivshmem_size, ivshmem_size);
-    if(!mem_addr) {
-        uk_pr_err("Failed to allocate BAR region\n");
-        return -ENOMEM;
-    }
-    uk_pr_info("mem_addr_start:0x%lx\n", mem_addr);
-    /* Write memory adress back to BAR*/
-    bar2_data = (uint64_t)mem_addr & 0xffffffff;
-    bar3_data = (uint64_t)mem_addr >> 32;
-    uk_pr_info("bar2_data:0x%lx\n", bar2_data);
-    uk_pr_info("bar3_data:0x%lx\n", bar3_data);
-    pci_conf_write(bar3_addr, bar3_data);
-    pci_conf_write(bar2_addr, bar2_data);
 
     ivshmem_dev->pdev = pci_dev;
     ivshmem_dev->ivshmem_size = ivshmem_size;
-    ivshmem_dev->ivshmem_addr_start = mem_addr;   
+    ivshmem_dev->ivshmem_addr_start = ivshmem_addr;   
     
     return 0;
 }
