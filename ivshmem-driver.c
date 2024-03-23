@@ -11,7 +11,7 @@ struct ivshmem_pci_dev *ivshmem_dev;
  * Static function declaration.
  */
 
-static inline uint32_t get_config_addr(uint32_t bus, uint32_t device, uint32_t function, uint32_t offset)
+static inline __u32 get_config_addr(__u32 bus, __u32 device, __u32 function, __u32 offset)
 {
     return (PCI_ENABLE_BIT)
 			| (bus << PCI_BUS_SHIFT)
@@ -22,7 +22,7 @@ static inline uint32_t get_config_addr(uint32_t bus, uint32_t device, uint32_t f
 /**
  * Read pci config data from addr
 */
-static inline uint32_t pci_conf_read(uint32_t addr)
+static inline __u32 pci_conf_read(__u32 addr)
 {
     outl(PCI_CONFIG_ADDR, addr);
     return inl(PCI_CONFIG_DATA);
@@ -30,7 +30,7 @@ static inline uint32_t pci_conf_read(uint32_t addr)
 /**
  * Write data to addr
 */
-static inline void pci_conf_write(uint32_t addr, uint32_t data)
+static inline void pci_conf_write(__u32 addr, __u32 data)
 {
     outl(PCI_CONFIG_ADDR, addr);
 	outl(PCI_CONFIG_DATA, data);
@@ -41,9 +41,9 @@ static int ivshmem_pci_add_dev(struct pci_device *pci_dev)
 {
     UK_ASSERT(pci_dev != NULL);
     int rc = 0;
-    uint32_t bus, device, function, command_addr, command_data;
-    uint32_t bar0_addr, bar1_addr, bar2_addr, bar3_addr;
-    uint32_t bar0_data, bar1_data, bar2_data, bar3_data;
+    __u32 bus, device, function, command_addr, command_data;
+    __u32 bar0_addr, bar1_addr, bar2_addr, bar3_addr;
+    __u32 bar0_data, bar1_data, bar2_data, bar3_data;
 
     pci_dev->state = PCI_DEVICE_STATE_RUNNING;
 
@@ -66,26 +66,18 @@ static int ivshmem_pci_add_dev(struct pci_device *pci_dev)
 
     /* Probe BAR data */
     bar0_addr = get_config_addr(bus, device, function, PCI_BASE_ADDRESS_0);
-    pci_conf_write(bar0_addr, 0xffffffff);
     bar0_data = pci_conf_read(bar0_addr);
-
+    
     bar2_addr = get_config_addr(bus, device, function, PCI_BASE_ADDRESS_2);
-    //
 	bar2_data = pci_conf_read(bar2_addr);
     uk_pr_info("bar2_data:0x%lx\n", bar2_data);
 
     bar3_addr = get_config_addr(bus, device, function, PCI_BASE_ADDRESS_3);
-    //
 	bar3_data = pci_conf_read(bar3_addr);
     uk_pr_info("bar3_data:0x%lx\n", bar3_data);
 
-    uint64_t ivshmem_addr = (((uint64_t)bar3_data << 32) | (bar2_data & 0xfffffff0));
-    /* Calculate share memory region size */
-    pci_conf_write(bar2_addr, 0xffffffff);
-    bar2_data = pci_conf_read(bar2_addr);
-    pci_conf_write(bar3_addr, 0xffffffff);
-    bar3_data = pci_conf_read(bar3_addr);
-    uint64_t ivshmem_size = ~((((uint64_t)bar3_data << 32) | bar2_data) & 0xfffffffffffffff0) + 1;
+    __u64 ivshmem_addr = (((__u64)bar3_data << 32) | (bar2_data & 0xfffffff0));
+    __u64 ivshmem_size = 4194304;
     uk_pr_info("ivshmem_size:0x%lx\n", ivshmem_size);
 
     ivshmem_dev->pdev = pci_dev;
