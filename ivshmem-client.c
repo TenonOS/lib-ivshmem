@@ -15,9 +15,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#include "qemu/queue.h"
-
 #include "ivshmem-client.h"
+
+#define G_N_ELEMENTS(arr)		(sizeof (arr) / sizeof ((arr)[0]))
 
 /* log a message on stdout if verbose=1 */
 #define IVSHMEM_CLIENT_DEBUG(client, fmt, ...) do { \
@@ -59,7 +59,7 @@ ivshmem_client_read_one_msg(IvshmemClient *client, int64_t *index, int *fd)
         return -1;
     }
 
-    *index = GINT64_FROM_LE(*index);
+    //*index = GINT64_FROM_LE(*index);
     *fd = -1;
 
     for (cmsg = CMSG_FIRSTHDR(&msg); cmsg; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
@@ -88,7 +88,7 @@ ivshmem_client_free_peer(IvshmemClient *client, IvshmemClientPeer *peer)
         close(peer->vectors[vector]);
     }
 
-    g_free(peer);
+    free(peer);
 }
 
 /* handle message coming from server (new peer, new vectors) */
@@ -123,7 +123,7 @@ ivshmem_client_handle_server_msg(IvshmemClient *client)
 
     /* new peer */
     if (peer == NULL) {
-        peer = g_malloc0(sizeof(*peer));
+        peer = malloc(sizeof(*peer));
         peer->id = peer_id;
         peer->vectors_count = 0;
         QTAILQ_INSERT_TAIL(&client->peer_list, peer, next);
