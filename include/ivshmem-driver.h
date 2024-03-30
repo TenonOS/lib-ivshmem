@@ -11,10 +11,13 @@ static struct uk_alloc *a;
 #define IVSHMEM_MEMORY_BAR    2
 
 struct ivshmem_pci_dev {
-	/* BAR2 region */
+    /* BAR region */
+    __u32 bar_addr[7];
+	/* ivshmem region */
     __u64 *ivshmem_addr_start;
     __u64 ivshmem_size;
 	/* Pci device information */
     struct pci_device *pdev;
 };
 
+void ivshmem_bar_mount();
