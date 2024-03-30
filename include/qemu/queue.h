@@ -572,5 +572,3 @@ union {                                                                 \
             *QLIST_RAW_NEXT(elm, entry) = NULL;                                \
         }                                                                      \
 } while (0)
-
-#endif /* QEMU_SYS_QUEUE_H */
