@@ -20,6 +20,7 @@
  */
 
 #include <sys/select.h>
+#include <limits.h>
 
 #include "qemu/queue.h"
 #include "qemu/ivshmem.h"
