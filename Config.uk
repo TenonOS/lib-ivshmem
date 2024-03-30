@@ -1,3 +1,19 @@
 menuconfig LIBIVSHMEM
 	bool "libivshmem: Driver for ivshmem device"
+	depends on HAVE_PCI
+	depends on ARCH_X86_64
+	select LIBUKBUS_PCI
+	select LIBUKBUS_PLATFORM
 	default n
+
+if LIBIVSHMEM
+	config IVSHMEM_PLAIN
+	bool "Driver for ivshmem-plain type device"
+	default y
+
+	config IVSHMEM_DOORBELL
+	bool "Driver for ivshmem-doorbell type device"
+	default n
+	select LIBPOSIX_EVENTFD
+	select LIBPOSIX_UNIXSOCKET
+endif
