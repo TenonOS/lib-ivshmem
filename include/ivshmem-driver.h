@@ -18,6 +18,9 @@ struct ivshmem_pci_dev {
     __u64 ivshmem_size;
 	/* Pci device information */
     struct pci_device *pdev;
+    __u32 ivposition;
+    __u8 revision;
+    __u8 cap_pointer;
+    /* Event file descriptor */
+    int efd;
 };
-
-void ivshmem_bar_mount();
