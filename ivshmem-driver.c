@@ -9,14 +9,13 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <fcntl.h>
-
-#include "./include/ivshmem-driver.h"
-
-#define DEV_IVSHMEM_NAME "ivshmem"
+#include <ivshmem-driver.h>
 
 struct ivshmem_pci_dev *ivshmem_pdev;
+int noraml_ivshmem_init = 0;
+struct ivshmem_pci_dev *ivshmem_pdev_cxl;
 
-
+#define DEV_IVSHMEM_NAME "ivshmem"
 
 /**
  * Static function declaration.
@@ -48,69 +47,57 @@ static inline void pci_conf_write(__u32 addr, __u32 data)
     return;
 }
 
-static int ivshmem_irq_handle(void *arg)
-{
-    struct ivshmem_pci_dev *pdev = (struct ivshmem_pci_dev *) arg;
-
-}
-
 static int ivshmem_pci_add_dev(struct pci_device *pci_dev)
 {
     UK_ASSERT(pci_dev);
-    int rc = 0;
-    __u32 command_addr, command_data;
-    __u32 devreg_addr, bar1_data, bar2_data, bar3_data;
-    
+    if (!noraml_ivshmem_init) {
+        noraml_ivshmem_init = 1;
+        __u32 command_addr, command_data;
+        __u32 devreg_addr, bar1_data, bar2_data, bar3_data;
+        pci_dev->state = PCI_DEVICE_STATE_RUNNING;
+        uk_pr_info("Allocate ivshmem device\n");
+        ivshmem_pdev = uk_malloc(a, sizeof(*ivshmem_pdev));
+        if (!ivshmem_pdev) {
+            uk_pr_err("Failed to allocate ivshmem pci device\n");
+            return -ENOMEM;
+        }
+        /* Enable memory and IO */
+        command_addr = get_config_addr(pci_dev->addr, PCI_COMMAND);
+        pci_conf_write(command_addr, PCI_COMMAND_DECODE_ENABLE | PCI_COMMAND_MASTER);
+        command_data = pci_conf_read(command_addr);
+        uk_pr_info("command_data:0x%x\n", command_data);
+        /* Probe revision id */
+        __u32 class_addr = get_config_addr(pci_dev->addr, PCI_CONF_CLASS_ID);
+        ivshmem_pdev->revision = pci_conf_read(class_addr) & PCI_CLASS_REVISION;
+        /* Probe BAR data */
+        ivshmem_pdev->bar_addr[0] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_0);
+        devreg_addr = pci_conf_read(ivshmem_pdev->bar_addr[0]);
+        uk_pr_info("bar0_data:0x%x\n", devreg_addr);
 
-    pci_dev->state = PCI_DEVICE_STATE_RUNNING;
+        /* Probe interrupt info */
+        __u32 int_mask, int_stat, IVPosition;
+        int_mask = readl((__u32 *)devreg_addr);
+        uk_pr_info("interrupt mask:0x%x\n", int_mask);
+        int_stat = readl((__u32 *)(devreg_addr | 0x4));
+        uk_pr_info("interrupt status:0x%x\n", int_stat);
+        IVPosition = readl((__u32 *)(devreg_addr | 0x8));
+        uk_pr_info("IVPosition:0x%x\n", IVPosition);
 
-    uk_pr_info("Allocate ivshmem device\n");
-    ivshmem_pdev = uk_malloc(a, sizeof(*ivshmem_pdev));
-    if (!ivshmem_pdev) {
-        uk_pr_err("Failed to allocate ivshmem pci device\n");
-        return -ENOMEM;
-    }
+        ivshmem_pdev->bar_addr[1] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_1);
+        bar1_data = pci_conf_read(ivshmem_pdev->bar_addr[1]);
+        uk_pr_info("bar1_data:0x%x\n", bar1_data);
 
-    /* Enable memory and IO */
-    command_addr = get_config_addr(pci_dev->addr, PCI_COMMAND);
-    pci_conf_write(command_addr, PCI_COMMAND_DECODE_ENABLE | PCI_COMMAND_MASTER);
-    command_data = pci_conf_read(command_addr);
-    uk_pr_info("command_data:0x%lx\n", command_data);
+        ivshmem_pdev->bar_addr[2] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_2);
+	    bar2_data = pci_conf_read(ivshmem_pdev->bar_addr[2]);
+        uk_pr_info("bar2_data:0x%x\n", bar2_data);
 
-    /* Probe revision id */
-    __u32 class_addr = get_config_addr(pci_dev->addr, PCI_CONF_CLASS_ID);
-    ivshmem_pdev->revision = pci_conf_read(class_addr) & PCI_CLASS_REVISION;
+        ivshmem_pdev->bar_addr[3] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_3);
+	    bar3_data = pci_conf_read(ivshmem_pdev->bar_addr[3]);
+        uk_pr_info("bar3_data:0x%x\n", bar3_data);
 
-    /* Probe BAR data */
-    ivshmem_pdev->bar_addr[0] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_0);
-    devreg_addr = pci_conf_read(ivshmem_pdev->bar_addr[0]);
-    uk_pr_info("bar0_data:0x%lx\n", devreg_addr);
-
-    /* Probe interrupt info */
-    __u32 int_mask, int_stat, IVPosition, doorbell;
-    int_mask = readl(devreg_addr);
-    uk_pr_info("interrupt mask:0x%lx\n", int_mask);
-    int_stat = readl(devreg_addr | 0x4);
-    uk_pr_info("interrupt status:0x%lx\n", int_stat);
-    IVPosition = readl(devreg_addr | 0x8);
-    uk_pr_info("IVPosition:0x%lx\n", IVPosition);
-
-    ivshmem_pdev->bar_addr[1] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_1);
-    bar1_data = pci_conf_read(ivshmem_pdev->bar_addr[1]);
-    uk_pr_info("bar1_data:0x%lx\n", bar1_data);
-
-    ivshmem_pdev->bar_addr[2] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_2);
-	bar2_data = pci_conf_read(ivshmem_pdev->bar_addr[2]);
-    uk_pr_info("bar2_data:0x%lx\n", bar2_data);
-
-    ivshmem_pdev->bar_addr[3] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_3);
-	bar3_data = pci_conf_read(ivshmem_pdev->bar_addr[3]);
-    uk_pr_info("bar3_data:0x%lx\n", bar3_data);
-
-    __u64 ivshmem_addr = (((__u64)bar3_data << 32) | (bar2_data & 0xfffffff0));
-    __u64 ivshmem_size = 4194304;
-    uk_pr_info("ivshmem_size:0x%lx\n", ivshmem_size);
-    
+        __u64 ivshmem_addr = (((__u64)bar3_data << 32) | (bar2_data & 0xfffffff0));
+        __u64 ivshmem_size = 0x40000000;
+        uk_pr_info("ivshmem_size:0x%x\n", ivshmem_size);
     // int rc = 0;
     // rc = uk_intctlr_irq_register(ivshmem_pdev->pdev->irq, ivshmem_irq_handle,
     //          ivshmem_pdev);
@@ -118,13 +105,69 @@ static int ivshmem_pci_add_dev(struct pci_device *pci_dev)
 	// 	uk_pr_err("Failed to register the interrupt\n");
 	// 	return rc;
 	// }
+        ivshmem_pdev->pdev = pci_dev;
+        ivshmem_pdev->ivshmem_size = ivshmem_size;
+        ivshmem_pdev->ivshmem_addr_start = ivshmem_addr;
+        ivshmem_pdev->ivposition = IVPosition;  
+    } else {
+        __u32 command_addr, command_data;
+        __u32 devreg_addr, bar1_data, bar2_data, bar3_data;
+        pci_dev->state = PCI_DEVICE_STATE_RUNNING;
+        uk_pr_info("Allocate ivshmem device\n");
+        ivshmem_pdev_cxl = uk_malloc(a, sizeof(*ivshmem_pdev_cxl));
+        if (!ivshmem_pdev_cxl) {
+            uk_pr_err("Failed to allocate ivshmem pci device\n");
+            return -ENOMEM;
+        }
+        /* Enable memory and IO */
+        command_addr = get_config_addr(pci_dev->addr, PCI_COMMAND);
+        pci_conf_write(command_addr, PCI_COMMAND_DECODE_ENABLE | PCI_COMMAND_MASTER);
+        command_data = pci_conf_read(command_addr);
+        uk_pr_info("command_data:0x%x\n", command_data);
+        /* Probe revision id */
+        __u32 class_addr = get_config_addr(pci_dev->addr, PCI_CONF_CLASS_ID);
+        ivshmem_pdev_cxl->revision = pci_conf_read(class_addr) & PCI_CLASS_REVISION;
+        /* Probe BAR data */
+        ivshmem_pdev_cxl->bar_addr[0] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_0);
+        devreg_addr = pci_conf_read(ivshmem_pdev_cxl->bar_addr[0]);
+        uk_pr_info("bar0_data:0x%x\n", devreg_addr);
 
+        /* Probe interrupt info */
+        __u32 int_mask, int_stat, IVPosition;
+        int_mask = readl((__u32 *)devreg_addr);
+        uk_pr_info("interrupt mask:0x%x\n", int_mask);
+        int_stat = readl((__u32 *)(devreg_addr | 0x4));
+        uk_pr_info("interrupt status:0x%x\n", int_stat);
+        IVPosition = readl((__u32 *)(devreg_addr | 0x8));
+        uk_pr_info("IVPosition:0x%x\n", IVPosition);
 
-    
-    ivshmem_pdev->pdev = pci_dev;
-    ivshmem_pdev->ivshmem_size = ivshmem_size;
-    ivshmem_pdev->ivshmem_addr_start = ivshmem_addr;
-    ivshmem_pdev->ivposition = IVPosition;   
+        ivshmem_pdev_cxl->bar_addr[1] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_1);
+        bar1_data = pci_conf_read(ivshmem_pdev_cxl->bar_addr[1]);
+        uk_pr_info("bar1_data:0x%x\n", bar1_data);
+
+        ivshmem_pdev_cxl->bar_addr[2] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_2);
+	    bar2_data = pci_conf_read(ivshmem_pdev_cxl->bar_addr[2]);
+        uk_pr_info("bar2_data:0x%x\n", bar2_data);
+
+        ivshmem_pdev_cxl->bar_addr[3] = get_config_addr(pci_dev->addr, PCI_BASE_ADDRESS_3);
+	    bar3_data = pci_conf_read(ivshmem_pdev_cxl->bar_addr[3]);
+        uk_pr_info("bar3_data:0x%x\n", bar3_data);
+
+        __u64 ivshmem_addr = (((__u64)bar3_data << 32) | (bar2_data & 0xfffffff0));
+        __u64 ivshmem_size = 0x20000000;
+        uk_pr_info("ivshmem_size:0x%x\n", ivshmem_size);
+    // int rc = 0;
+    // rc = uk_intctlr_irq_register(ivshmem_pdev_cxl->pdev->irq, ivshmem_irq_handle,
+    //          ivshmem_pdev_cxl);
+    // if (rc != 0) {
+	// 	uk_pr_err("Failed to register the interrupt\n");
+	// 	return rc;
+	// }
+        ivshmem_pdev_cxl->pdev = pci_dev;
+        ivshmem_pdev_cxl->ivshmem_size = ivshmem_size;
+        ivshmem_pdev_cxl->ivshmem_addr_start = ivshmem_addr;
+        ivshmem_pdev_cxl->ivposition = IVPosition;
+    } 
     return 0;
 }
 
@@ -171,7 +214,6 @@ static int dev_ivshmem_read(struct device *dev, struct uio *uio,
     UK_ASSERT(dev->private_data);
 	size_t count;
 	char *buf;
-    int rc;
     struct ivshmem_pci_dev *ivshmem_dev = dev->private_data;
 	buf = uio->uio_iov->iov_base;
 	count = uio->uio_iov->iov_len;
@@ -199,15 +241,11 @@ static dev_ivshmem_ioctl(struct device *dev, unsigned long cmd, void *args)
 {
     UK_ASSERT(dev);
     struct ivshmem_pci_dev *pdev;
-    __u16 ivposition;
-    __u16 vector;
-    __u32 value;
 
     pdev = (struct ivshmem_pci_dev *)dev->private_data;
     UK_ASSERT(pdev);
-    switch (cmd){
-
-    }
+    (void)(cmd);
+    return 0;
 }
 
 static struct devops ivshmem_devops = {
@@ -226,12 +264,11 @@ static struct driver drv_ivshmem = {
 
 static int devfs_register(struct uk_init_ctx *ictx __unused)
 {
-	int rc;
     struct device *dev;
 	uk_pr_info("Register '%s' to devfs\n", DEV_IVSHMEM_NAME);
     //struct device **ivshmem_devp;
 	/* register /dev/ivshmem */
-	rc = device_create(&drv_ivshmem, DEV_IVSHMEM_NAME, D_CHR, &dev);
+	int rc = device_create(&drv_ivshmem, DEV_IVSHMEM_NAME, D_CHR, &dev);
 	if (unlikely(rc)) {
 		uk_pr_err("Failed to register '%s' to devfs: %d\n",
 			  DEV_IVSHMEM_NAME, rc);
